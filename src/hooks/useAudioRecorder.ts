@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { encodeAudioBufferToWavBlob } from '../utils';
 
 export type RecorderState = 'idle' | 'recording' | 'paused' | 'playing' | 'downloading';
 
@@ -153,25 +154,42 @@ export const useAudioRecorder = () => {
         }
       };
 
-      mediaRecorder.onstop = () => {
-        // Store the current duration as the total recording duration
-        totalRecordingDurationRef.current = duration;
-        
-        // Create blob from all chunks collected so far
-        const blob = new Blob(chunksRef.current, { type: 'audio/wav' });
-        setAudioBlob(blob);
-        
-        // Clean up the old URL if it exists
-        if (audioUrl) {
-          URL.revokeObjectURL(audioUrl);
+      mediaRecorder.onstop = async () => {
+        const originalBlob = new Blob(chunksRef.current, { type: 'audio/wav' });
+        let processedBlob = originalBlob;
+        let audioCtx: AudioContext | null = null;
+
+        try {
+          audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const arrayBuffer = await originalBlob.arrayBuffer();
+          const decodedAudioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+          totalRecordingDurationRef.current = decodedAudioBuffer.duration;
+          console.log("Actual audio duration from decoded buffer:", decodedAudioBuffer.duration);
+
+          processedBlob = encodeAudioBufferToWavBlob(decodedAudioBuffer);
+
+        } catch (error) {
+          console.error("Error processing audio blob, falling back to original:", error);
+          totalRecordingDurationRef.current = duration;
+          console.log("Fell back to timer-based duration:", duration);
+        } finally {
+          if (audioCtx && audioCtx.state !== 'closed') {
+            try {
+              await audioCtx.close();
+            } catch (closeError) {
+              console.error("Error closing AudioContext:", closeError);
+            }
+          }
         }
-        
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
-        
-        // Stop the stream
+
+        setAudioBlob(processedBlob);
+        const newUrl = URL.createObjectURL(processedBlob);
+        setAudioUrl(newUrl);
+
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
         }
       };
 
