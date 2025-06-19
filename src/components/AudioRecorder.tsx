@@ -3,7 +3,6 @@ import {
   Mic, 
   Pause, 
   Play, 
-  Download, 
   Trash2, 
   MicOff,
   Loader2
@@ -223,20 +222,23 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
           )}
         </div>
 
-        {/* Download Button - Fixed size */}
+        {/* Submit Button - Changed from icon to text button */}
         <button
           onClick={handleDownload}
           disabled={state === 'idle' || state === 'recording' || isDownloading}
-          className={`w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center ${
+          className={`px-4 py-2 rounded-lg font-medium transition-colors duration-150 flex items-center justify-center ${
             state === 'idle' || state === 'recording' || isDownloading
               ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
               : 'bg-green-600 hover:bg-green-700 text-white'
           }`}
         >
           {isDownloading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Submitting...</span>
+            </div>
           ) : (
-            <Download className="w-5 h-5" />
+            'Submit'
           )}
         </button>
       </div>
