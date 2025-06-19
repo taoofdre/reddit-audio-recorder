@@ -188,12 +188,18 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
           )}
           
           {isRecording && (
-            <button
-              onClick={pauseRecording}
-              className="bg-red-600 hover:bg-red-700 text-white w-14 h-14 rounded-full transition-colors duration-150 flex items-center justify-center"
-            >
-              <Pause className="w-6 h-6" />
-            </button>
+            <div className="relative group">
+              <button
+                onClick={pauseRecording}
+                className="bg-red-600 hover:bg-red-700 text-white w-14 h-14 rounded-full transition-colors duration-150 flex items-center justify-center"
+              >
+                <Pause className="w-6 h-6" />
+              </button>
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                Pause recording
+              </div>
+            </div>
           )}
           
           {isPaused && (
