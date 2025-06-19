@@ -152,17 +152,25 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
       <div className="h-14 flex items-center justify-between mt-auto">
         {/* Delete Button - Fixed size - Hidden during download */}
         {!isDownloading && (
-          <button
-            onClick={handleDelete}
-            disabled={state === 'idle'}
-            className={`w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center ${
-              state === 'idle'
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-gray-700 hover:bg-gray-600 text-white'
-            }`}
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <div className="relative group">
+            <button
+              onClick={handleDelete}
+              disabled={state === 'idle'}
+              className={`w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center ${
+                state === 'idle'
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+              }`}
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+            {/* Tooltip */}
+            {state !== 'idle' && (
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                Delete
+              </div>
+            )}
+          </div>
         )}
 
         {/* Spacer when delete button is hidden */}
@@ -190,18 +198,30 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
           
           {isPaused && (
             <div className="flex gap-2 items-center">
-              <button
-                onClick={resumeRecording}
-                className="bg-red-600 hover:bg-red-700 text-white w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center"
-              >
-                <Mic className="w-5 h-5" />
-              </button>
-              <button
-                onClick={playAudio}
-                className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center"
-              >
-                <Play className="w-5 h-5" />
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={resumeRecording}
+                  className="bg-red-600 hover:bg-red-700 text-white w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center"
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                  Resume recording
+                </div>
+              </div>
+              <div className="relative group">
+                <button
+                  onClick={playAudio}
+                  className="bg-green-600 hover:bg-green-700 text-white w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center"
+                >
+                  <Play className="w-5 h-5" />
+                </button>
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                  Play
+                </div>
+              </div>
             </div>
           )}
           
@@ -216,21 +236,29 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
         </div>
 
         {/* Submit Button - Plane icon only */}
-        <button
-          onClick={handleDownload}
-          disabled={state === 'idle' || state === 'recording' || isDownloading}
-          className={`w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center ${
-            state === 'idle' || state === 'recording' || isDownloading
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 text-white'
-          }`}
-        >
-          {isDownloading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Send className="w-5 h-5" />
+        <div className="relative group">
+          <button
+            onClick={handleDownload}
+            disabled={state === 'idle' || state === 'recording' || isDownloading}
+            className={`w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center ${
+              state === 'idle' || state === 'recording' || isDownloading
+                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
+          >
+            {isDownloading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-5 h-5" />
+            )}
+          </button>
+          {/* Tooltip */}
+          {state !== 'idle' && state !== 'recording' && !isDownloading && (
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+              Submit
+            </div>
           )}
-        </button>
+        </div>
       </div>
     </div>
   );
