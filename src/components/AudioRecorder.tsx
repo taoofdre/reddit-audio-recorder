@@ -58,14 +58,6 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
   // Calculate display time for timer
   const getDisplayTime = () => {
     if (isPlaying) {
-      // During playback, scale the audio playback time to match the total recording duration
-      // This ensures the timer shows the correct time relative to the original recording
-      if (audioBlob) {
-        // We need to create a temporary audio element to get the actual audio duration
-        // But for now, we'll use a simple scaling approach
-        const totalDuration = totalRecordingDuration || duration;
-        return Math.floor((playbackTime / (audioBlob.size / 100000)) * totalDuration);
-      }
       return Math.floor(playbackTime);
     }
     return duration;
