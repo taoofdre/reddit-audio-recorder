@@ -181,9 +181,9 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
           {state === 'idle' && (
             <button
               onClick={startRecording}
-              className="bg-red-600 hover:bg-red-700 text-white w-14 h-14 rounded-full transition-colors duration-150 flex items-center justify-center"
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-150 flex items-center justify-center"
             >
-              <Mic className="w-6 h-6" />
+              Record reply
             </button>
           )}
           
