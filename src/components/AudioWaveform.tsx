@@ -97,10 +97,7 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({
     // Calculate progress based on the relationship between actual audio time and total recording time
     let progress = 0;
     if (isPlaying && actualAudioDuration > 0) {
-      // Scale the audio playback time to match the total recording duration
-      // This accounts for the fact that paused recordings create compressed audio
-      const scaledPlaybackTime = (playbackTime / actualAudioDuration) * totalRecordingDuration;
-      progress = Math.min(Math.max(scaledPlaybackTime / totalRecordingDuration, 0), 1);
+      progress = Math.min(Math.max(playbackTime / actualAudioDuration, 0), 1);
     }
 
     // Clear canvas

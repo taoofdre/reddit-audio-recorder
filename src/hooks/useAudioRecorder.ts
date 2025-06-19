@@ -168,6 +168,31 @@ export const useAudioRecorder = () => {
         
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
+
+        // Decode audio to get precise duration
+        const newAudioContext = new AudioContext();
+        blob.arrayBuffer().then(arrayBuffer => {
+          newAudioContext.decodeAudioData(
+            arrayBuffer,
+            (buffer) => {
+              totalRecordingDurationRef.current = buffer.duration;
+              console.log("Actual audio duration set:", buffer.duration);
+              newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
+            },
+            (error) => {
+              console.error('Error decoding audio data:', error);
+              // Fallback to the timer-based duration if decoding fails
+              totalRecordingDurationRef.current = duration;
+              newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
+            }
+          );
+        }).catch(error => {
+          console.error('Error reading blob as ArrayBuffer:', error);
+          // Fallback to the timer-based duration if reading blob fails
+          totalRecordingDurationRef.current = duration;
+          // Ensure context is closed even if blob reading fails before decodeAudioData is called
+          newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
+        });
         
         // Stop the stream
         if (streamRef.current) {
