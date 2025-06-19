@@ -5,7 +5,8 @@ import {
   Play, 
   Trash2, 
   MicOff,
-  Loader2
+  Loader2,
+  Send
 } from 'lucide-react';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { formatTime } from '../utils/formatTime';
@@ -112,7 +113,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
             <div className="flex items-center gap-2 mb-2">
               <Loader2 className="w-4 h-4 animate-spin text-green-400" />
-              <p className="text-green-400 text-sm">Downloading audio...</p>
+              <p className="text-green-400 text-sm">Submitting...</p>
             </div>
             <div className="w-32 bg-gray-700 rounded-full h-1">
               <div className="bg-green-600 h-1 rounded-full animate-pulse" style={{ width: '60%' }}></div>
@@ -222,23 +223,20 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
           )}
         </div>
 
-        {/* Submit Button - Changed from icon to text button */}
+        {/* Submit Button - Plane icon only */}
         <button
           onClick={handleDownload}
           disabled={state === 'idle' || state === 'recording' || isDownloading}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors duration-150 flex items-center justify-center ${
+          className={`w-12 h-12 rounded-full transition-colors duration-150 flex items-center justify-center ${
             state === 'idle' || state === 'recording' || isDownloading
               ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
               : 'bg-green-600 hover:bg-green-700 text-white'
           }`}
         >
           {isDownloading ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Submitting...</span>
-            </div>
+            <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            'Submit'
+            <Send className="w-5 h-5" />
           )}
         </button>
       </div>
