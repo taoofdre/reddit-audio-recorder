@@ -245,14 +245,42 @@ export const useAudioRecorder = () => {
   const pauseRecording = useCallback(async () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       console.log('Pausing recording, current chunks:', chunksRef.current.length);
+      
+      // Create a promise that resolves when the MediaRecorder stops
+      const stopPromise = new Promise<void>((resolve) => {
+        if (mediaRecorderRef.current) {
+          const originalOnStop = mediaRecorderRef.current.onstop;
+          mediaRecorderRef.current.onstop = async (event) => {
+            // Call the original onstop handler first
+            if (originalOnStop) {
+              await originalOnStop.call(mediaRecorderRef.current, event);
+            }
+            resolve();
+          };
+        } else {
+          resolve();
+        }
+      });
+      
       // Stop the current recording session
       mediaRecorderRef.current.stop();
       stopTimer();
+      
+      // Wait for the MediaRecorder to finish stopping and collect final data
+      await stopPromise;
+      
       // Save the current duration
       pausedTimeRef.current = duration;
+      
+      // Finalize the recording immediately so the waveform appears
+      if (chunksRef.current.length > 0) {
+        console.log('Finalizing recording after pause');
+        await finalizeRecording();
+      }
+      
       setState('paused');
     }
-  }, [stopTimer, duration]);
+  }, [stopTimer, duration, finalizeRecording]);
 
   const resumeRecording = useCallback(async () => {
     console.log('Resuming recording, existing chunks:', chunksRef.current.length);
