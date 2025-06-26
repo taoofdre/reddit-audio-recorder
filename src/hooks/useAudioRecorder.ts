@@ -110,7 +110,6 @@ export const useAudioRecorder = () => {
     
     // Create blob from all chunks collected so far
     const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-    setAudioBlob(blob);
     
     // Clean up the old URL if it exists
     if (audioUrl) {
@@ -118,7 +117,6 @@ export const useAudioRecorder = () => {
     }
     
     const url = URL.createObjectURL(blob);
-    setAudioUrl(url);
 
     // Decode audio to get precise duration and set as total recording duration
     try {
@@ -144,6 +142,10 @@ export const useAudioRecorder = () => {
       totalRecordingDurationRef.current = duration;
       isFinalized.current = true;
     }
+
+    // Update state after processing is complete
+    setAudioBlob(blob);
+    setAudioUrl(url);
 
     return { blob, url };
   }, [audioUrl, duration]);
@@ -272,13 +274,17 @@ export const useAudioRecorder = () => {
       // Save the current duration
       pausedTimeRef.current = duration;
       
-      // Finalize the recording immediately so the waveform appears
+      // Set state to paused first
+      setState('paused');
+      
+      // Then finalize the recording so the waveform appears
       if (chunksRef.current.length > 0) {
         console.log('Finalizing recording after pause');
-        await finalizeRecording();
+        // Use setTimeout to ensure state update has been processed
+        setTimeout(async () => {
+          await finalizeRecording();
+        }, 50);
       }
-      
-      setState('paused');
     }
   }, [stopTimer, duration, finalizeRecording]);
 
