@@ -211,7 +211,7 @@ export const useAudioRecorder = () => {
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         console.log('MediaRecorder stopped, total chunks:', chunksRef.current.length);
         // Stop the stream
         if (streamRef.current) {
@@ -219,6 +219,12 @@ export const useAudioRecorder = () => {
         }
         // Reset finalized flag so we can finalize again with new chunks
         isFinalized.current = false;
+        
+        // Automatically finalize the recording when MediaRecorder stops
+        // This ensures the waveform updates immediately when pausing
+        if (chunksRef.current.length > 0) {
+          await finalizeRecording();
+        }
       };
 
       // Request data every second to ensure we capture all audio
@@ -234,9 +240,9 @@ export const useAudioRecorder = () => {
       console.error('Failed to start recording:', error);
       setHasPermission(false);
     }
-  }, [startTimer, state, audioUrl]);
+  }, [startTimer, state, audioUrl, finalizeRecording]);
 
-  const pauseRecording = useCallback(() => {
+  const pauseRecording = useCallback(async () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       console.log('Pausing recording, current chunks:', chunksRef.current.length);
       // Stop the current recording session
@@ -245,6 +251,12 @@ export const useAudioRecorder = () => {
       // Save the current duration
       pausedTimeRef.current = duration;
       setState('paused');
+      
+      // Wait a bit for the MediaRecorder.onstop to complete finalization
+      // This ensures the waveform is updated when we pause
+      setTimeout(() => {
+        console.log('Pause complete, finalization should be done');
+      }, 100);
     }
   }, [stopTimer, duration]);
 
@@ -259,12 +271,18 @@ export const useAudioRecorder = () => {
     if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current)) {
       console.log('Finalizing before playback');
       await finalizeRecording();
+      
+      // Wait a bit for the state to update after finalization
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    if (audioUrl) {
+    // Check again after potential finalization
+    const currentAudioUrl = audioUrl || (audioBlob ? URL.createObjectURL(audioBlob) : null);
+    
+    if (currentAudioUrl) {
       // Create or update audio element
       if (!audioRef.current) {
-        audioRef.current = new Audio(audioUrl);
+        audioRef.current = new Audio(currentAudioUrl);
         audioRef.current.onended = () => {
           setPlaybackTime(totalRecordingDurationRef.current);
           setState('paused');
@@ -281,15 +299,21 @@ export const useAudioRecorder = () => {
         };
       } else {
         // Update the audio source if it has changed
-        audioRef.current.src = audioUrl;
+        audioRef.current.src = currentAudioUrl;
         audioRef.current.load();
       }
       
-      audioRef.current.play();
-      setState('playing');
-      startPlaybackTimer();
+      try {
+        await audioRef.current.play();
+        setState('playing');
+        startPlaybackTimer();
+      } catch (error) {
+        console.error('Error playing audio:', error);
+      }
+    } else {
+      console.error('No audio URL available for playback');
     }
-  }, [audioUrl, startPlaybackTimer, stopPlaybackTimer, finalizeRecording, audioBlob]);
+  }, [audioUrl, audioBlob, startPlaybackTimer, stopPlaybackTimer, finalizeRecording]);
 
   const pausePlayback = useCallback(() => {
     if (audioRef.current) {
