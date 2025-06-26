@@ -100,6 +100,45 @@ export const useAudioRecorder = () => {
     }
   }, []);
 
+  const finalizeRecording = useCallback(() => {
+    // Create blob from all chunks collected so far
+    const blob = new Blob(chunksRef.current, { type: 'audio/wav' });
+    setAudioBlob(blob);
+    
+    // Clean up the old URL if it exists
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+    }
+    
+    const url = URL.createObjectURL(blob);
+    setAudioUrl(url);
+
+    // Decode audio to get precise duration and set as total recording duration
+    const newAudioContext = new AudioContext();
+    blob.arrayBuffer().then(arrayBuffer => {
+      newAudioContext.decodeAudioData(
+        arrayBuffer,
+        (buffer) => {
+          totalRecordingDurationRef.current = buffer.duration;
+          console.log("Final audio duration set:", buffer.duration);
+          newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
+        },
+        (error) => {
+          console.error('Error decoding audio data:', error);
+          // Fallback to the timer-based duration if decoding fails
+          totalRecordingDurationRef.current = duration;
+          newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
+        }
+      );
+    }).catch(error => {
+      console.error('Error reading blob as ArrayBuffer:', error);
+      // Fallback to the timer-based duration if reading blob fails
+      totalRecordingDurationRef.current = duration;
+      // Ensure context is closed even if blob reading fails before decodeAudioData is called
+      newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
+    });
+  }, [audioUrl, duration]);
+
   const clearRecording = useCallback(() => {
     stopTimer();
     stopPlaybackTimer();
@@ -154,45 +193,8 @@ export const useAudioRecorder = () => {
       };
 
       mediaRecorder.onstop = () => {
-        // Store the current duration as the total recording duration
-        totalRecordingDurationRef.current = duration;
-        
-        // Create blob from all chunks collected so far
-        const blob = new Blob(chunksRef.current, { type: 'audio/wav' });
-        setAudioBlob(blob);
-        
-        // Clean up the old URL if it exists
-        if (audioUrl) {
-          URL.revokeObjectURL(audioUrl);
-        }
-        
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
-
-        // Decode audio to get precise duration
-        const newAudioContext = new AudioContext();
-        blob.arrayBuffer().then(arrayBuffer => {
-          newAudioContext.decodeAudioData(
-            arrayBuffer,
-            (buffer) => {
-              totalRecordingDurationRef.current = buffer.duration;
-              console.log("Actual audio duration set:", buffer.duration);
-              newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
-            },
-            (error) => {
-              console.error('Error decoding audio data:', error);
-              // Fallback to the timer-based duration if decoding fails
-              totalRecordingDurationRef.current = duration;
-              newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
-            }
-          );
-        }).catch(error => {
-          console.error('Error reading blob as ArrayBuffer:', error);
-          // Fallback to the timer-based duration if reading blob fails
-          totalRecordingDurationRef.current = duration;
-          // Ensure context is closed even if blob reading fails before decodeAudioData is called
-          newAudioContext.close().catch(e => console.error("Error closing AudioContext:", e));
-        });
+        // Finalize the recording when MediaRecorder stops
+        finalizeRecording();
         
         // Stop the stream
         if (streamRef.current) {
@@ -203,7 +205,7 @@ export const useAudioRecorder = () => {
       mediaRecorder.start();
       setState('recording');
       
-      // Resume timer from where it was paused
+      // Resume timer from where it was paused, or add to existing pausedTimeRef
       if (pausedTimeRef.current > 0) {
         setDuration(pausedTimeRef.current);
       }
@@ -212,10 +214,11 @@ export const useAudioRecorder = () => {
       console.error('Failed to start recording:', error);
       setHasPermission(false);
     }
-  }, [startTimer, state, audioUrl, duration]);
+  }, [startTimer, state, finalizeRecording]);
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      // Stop the MediaRecorder and timer, but don't process chunks into audioBlob yet
       mediaRecorderRef.current.stop();
       pausedTimeRef.current = duration; // Store the current duration
       setState('paused');
@@ -224,13 +227,18 @@ export const useAudioRecorder = () => {
   }, [stopTimer, duration]);
 
   const resumeRecording = useCallback(async () => {
-    // Resume recording by starting a new recording session
-    // The chunks will be accumulated in the existing chunksRef.current array
+    // When resuming, add to pausedTimeRef.current rather than resetting it
+    // The totalRecordingDurationRef.current should not be updated here
     await startRecording();
   }, [startRecording]);
 
   const playAudio = useCallback(() => {
     if (audioUrl) {
+      // Call finalizeRecording before creating/using the Audio element
+      if (chunksRef.current.length > 0 && !audioBlob) {
+        finalizeRecording();
+      }
+      
       if (!audioRef.current) {
         audioRef.current = new Audio(audioUrl);
         audioRef.current.onended = () => {
@@ -258,7 +266,7 @@ export const useAudioRecorder = () => {
       setState('playing');
       startPlaybackTimer();
     }
-  }, [audioUrl, startPlaybackTimer, stopPlaybackTimer]);
+  }, [audioUrl, startPlaybackTimer, stopPlaybackTimer, finalizeRecording, audioBlob]);
 
   const pausePlayback = useCallback(() => {
     if (audioRef.current) {
@@ -269,12 +277,20 @@ export const useAudioRecorder = () => {
   }, [stopPlaybackTimer]);
 
   const deleteRecording = useCallback(() => {
+    // Call finalizeRecording as part of cleanup if a recording was finalized
+    if (chunksRef.current.length > 0 && !audioBlob) {
+      finalizeRecording();
+    }
     clearRecording();
-  }, [clearRecording]);
+  }, [clearRecording, finalizeRecording, audioBlob]);
 
   const downloadRecording = useCallback(() => {
     if (audioBlob) {
       setState('downloading');
+      // Call finalizeRecording before returning the blob
+      if (chunksRef.current.length > 0) {
+        finalizeRecording();
+      }
       // Simulate download process and then clear the recording
       setTimeout(() => {
         clearRecording();
@@ -282,7 +298,7 @@ export const useAudioRecorder = () => {
       return audioBlob;
     }
     return null;
-  }, [audioBlob, clearRecording]);
+  }, [audioBlob, clearRecording, finalizeRecording]);
 
   useEffect(() => {
     return () => {
