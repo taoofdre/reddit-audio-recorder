@@ -25,6 +25,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
     hasPermission,
     audioBlob,
     totalRecordingDuration,
+    getDisplayTime,
     requestPermission,
     startRecording,
     pauseRecording,
@@ -54,14 +55,6 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
   const isPlaying = state === 'playing';
   const isDownloading = state === 'downloading';
   const showControls = isPaused || isPlaying || isRecording;
-
-  // Calculate display time for timer
-  const getDisplayTime = () => {
-    if (isPlaying) {
-      return Math.floor(playbackTime);
-    }
-    return duration;
-  };
 
   // Initial permission request state
   if (hasPermission === null) {
@@ -139,7 +132,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
                   audioBlob={audioBlob}
                   isPlaying={isPlaying}
                   playbackTime={playbackTime}
-                  totalRecordingDuration={totalRecordingDuration || duration}
+                  totalRecordingDuration={totalRecordingDuration}
                   className="w-full"
                 />
               </div>
