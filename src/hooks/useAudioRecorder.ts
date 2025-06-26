@@ -201,6 +201,11 @@ export const useAudioRecorder = () => {
           setAudioUrl(null);
         }
         isFinalized.current = false;
+      } else {
+        // If it's a resume operation (i.e., not state === 'idle'), explicitly set isFinalized.current = false
+        // This ensures that if the recording was previously finalized and then resumed, 
+        // it knows to re-finalize with the new data
+        isFinalized.current = false;
       }
 
       mediaRecorder.ondataavailable = (event) => {
@@ -217,14 +222,7 @@ export const useAudioRecorder = () => {
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
         }
-        // Reset finalized flag so we can finalize again with new chunks
-        isFinalized.current = false;
-        
-        // Automatically finalize the recording when MediaRecorder stops
-        // This ensures the waveform updates immediately when pausing
-        if (chunksRef.current.length > 0) {
-          await finalizeRecording();
-        }
+        // The onstop event should only handle stopping the stream tracks
       };
 
       // Request data every second to ensure we capture all audio
@@ -240,7 +238,7 @@ export const useAudioRecorder = () => {
       console.error('Failed to start recording:', error);
       setHasPermission(false);
     }
-  }, [startTimer, state, audioUrl, finalizeRecording]);
+  }, [startTimer, state, audioUrl]);
 
   const pauseRecording = useCallback(async () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -251,23 +249,23 @@ export const useAudioRecorder = () => {
       // Save the current duration
       pausedTimeRef.current = duration;
       setState('paused');
-      
-      // Wait a bit for the MediaRecorder.onstop to complete finalization
-      // This ensures the waveform is updated when we pause
-      setTimeout(() => {
-        console.log('Pause complete, finalization should be done');
-      }, 100);
     }
   }, [stopTimer, duration]);
 
   const resumeRecording = useCallback(async () => {
     console.log('Resuming recording, existing chunks:', chunksRef.current.length);
+    // Before calling await startRecording(), add the line isFinalized.current = false
+    // This is critical to signal that new audio data is being added and a new finalization will be required
+    isFinalized.current = false;
     // Start a new recording session that will add to existing chunks
     await startRecording();
   }, [startRecording]);
 
   const playAudio = useCallback(async () => {
-    // Before playing, finalize the recording if we have chunks but no finalized audio
+    // The condition if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current))
+    // should correctly trigger finalization. The await new Promise(resolve => setTimeout(resolve, 100));
+    // after finalizeRecording in playAudio might still be useful to ensure state updates propagate
+    // before Audio element uses audioUrl
     if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current)) {
       console.log('Finalizing before playback');
       await finalizeRecording();
@@ -328,7 +326,10 @@ export const useAudioRecorder = () => {
   }, [clearRecording]);
 
   const downloadRecording = useCallback(async () => {
-    // Finalize before download if needed
+    // The condition if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current))
+    // should correctly trigger finalization. The await new Promise(resolve => setTimeout(resolve, 100));
+    // after finalizeRecording in playAudio might still be useful to ensure state updates propagate
+    // before Audio element uses audioUrl
     if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current)) {
       console.log('Finalizing before download');
       await finalizeRecording();
