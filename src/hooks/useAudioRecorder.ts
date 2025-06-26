@@ -101,9 +101,9 @@ export const useAudioRecorder = () => {
     }
   }, []);
 
-  const finalizeRecording = useCallback(async () => {
+  const finalizeRecording = useCallback(async (): Promise<{ blob: Blob; url: string } | null> => {
     if (isFinalized.current || chunksRef.current.length === 0) {
-      return;
+      return null;
     }
 
     console.log('Finalizing recording with', chunksRef.current.length, 'chunks');
@@ -144,6 +144,8 @@ export const useAudioRecorder = () => {
       totalRecordingDurationRef.current = duration;
       isFinalized.current = true;
     }
+
+    return { blob, url };
   }, [audioUrl, duration]);
 
   const clearRecording = useCallback(() => {
@@ -262,20 +264,22 @@ export const useAudioRecorder = () => {
   }, [startRecording]);
 
   const playAudio = useCallback(async () => {
-    // The condition if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current))
-    // should correctly trigger finalization. The await new Promise(resolve => setTimeout(resolve, 100));
-    // after finalizeRecording in playAudio might still be useful to ensure state updates propagate
-    // before Audio element uses audioUrl
+    let currentAudioUrl = audioUrl;
+    let currentAudioBlob = audioBlob;
+
+    // If we need to finalize the recording, do it and use the returned values
     if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current)) {
       console.log('Finalizing before playback');
-      await finalizeRecording();
+      const result = await finalizeRecording();
+      
+      if (result) {
+        currentAudioBlob = result.blob;
+        currentAudioUrl = result.url;
+      }
       
       // Wait a bit for the state to update after finalization
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    
-    // Check again after potential finalization
-    const currentAudioUrl = audioUrl || (audioBlob ? URL.createObjectURL(audioBlob) : null);
     
     if (currentAudioUrl) {
       // Create or update audio element
@@ -326,22 +330,25 @@ export const useAudioRecorder = () => {
   }, [clearRecording]);
 
   const downloadRecording = useCallback(async () => {
-    // The condition if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current))
-    // should correctly trigger finalization. The await new Promise(resolve => setTimeout(resolve, 100));
-    // after finalizeRecording in playAudio might still be useful to ensure state updates propagate
-    // before Audio element uses audioUrl
+    let currentAudioBlob = audioBlob;
+
+    // If we need to finalize the recording, do it and use the returned blob
     if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current)) {
       console.log('Finalizing before download');
-      await finalizeRecording();
+      const result = await finalizeRecording();
+      
+      if (result) {
+        currentAudioBlob = result.blob;
+      }
     }
     
-    if (audioBlob) {
+    if (currentAudioBlob) {
       setState('downloading');
       // Simulate download process and then clear the recording
       setTimeout(() => {
         clearRecording();
       }, 2000);
-      return audioBlob;
+      return currentAudioBlob;
     }
     return null;
   }, [audioBlob, clearRecording, finalizeRecording]);
