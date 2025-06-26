@@ -18,6 +18,7 @@ export const useAudioRecorder = () => {
   const chunksRef = useRef<Blob[]>([]);
   const pausedTimeRef = useRef<number>(0);
   const totalRecordingDurationRef = useRef<number>(0);
+  const isFinalized = useRef<boolean>(false);
 
   // Check for existing permissions on mount
   useEffect(() => {
@@ -101,8 +102,14 @@ export const useAudioRecorder = () => {
   }, []);
 
   const finalizeRecording = useCallback(async () => {
+    if (isFinalized.current || chunksRef.current.length === 0) {
+      return;
+    }
+
+    console.log('Finalizing recording with', chunksRef.current.length, 'chunks');
+    
     // Create blob from all chunks collected so far
-    const blob = new Blob(chunksRef.current, { type: 'audio/wav' });
+    const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
     setAudioBlob(blob);
     
     // Clean up the old URL if it exists
@@ -122,10 +129,12 @@ export const useAudioRecorder = () => {
         const buffer = await audioContext.decodeAudioData(arrayBuffer);
         totalRecordingDurationRef.current = buffer.duration;
         console.log("Final audio duration set:", buffer.duration);
+        isFinalized.current = true;
       } catch (decodeError) {
         console.error('Error decoding audio data:', decodeError);
         // Fallback to the timer-based duration if decoding fails
         totalRecordingDurationRef.current = duration;
+        isFinalized.current = true;
       } finally {
         await audioContext.close();
       }
@@ -133,6 +142,7 @@ export const useAudioRecorder = () => {
       console.error('Error processing audio blob:', error);
       // Fallback to the timer-based duration if processing fails
       totalRecordingDurationRef.current = duration;
+      isFinalized.current = true;
     }
   }, [audioUrl, duration]);
 
@@ -165,6 +175,7 @@ export const useAudioRecorder = () => {
     chunksRef.current = [];
     pausedTimeRef.current = 0;
     totalRecordingDurationRef.current = 0;
+    isFinalized.current = false;
   }, [stopTimer, stopPlaybackTimer, audioUrl]);
 
   const startRecording = useCallback(async () => {
@@ -172,12 +183,14 @@ export const useAudioRecorder = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm'
+      });
       mediaRecorderRef.current = mediaRecorder;
       
-      // When starting fresh (state === 'idle' or mediaRecorderRef.current is not active)
+      // When starting fresh (state === 'idle')
       if (state === 'idle') {
-        // Reset chunksRef.current, pausedTimeRef.current = 0, clear audioBlob and audioUrl
+        // Reset everything for a fresh recording
         chunksRef.current = [];
         pausedTimeRef.current = 0;
         setDuration(0);
@@ -187,26 +200,32 @@ export const useAudioRecorder = () => {
           URL.revokeObjectURL(audioUrl);
           setAudioUrl(null);
         }
+        isFinalized.current = false;
       }
 
       mediaRecorder.ondataavailable = (event) => {
+        console.log('Data available, size:', event.data.size);
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
+          console.log('Total chunks now:', chunksRef.current.length);
         }
       };
 
-      // Remove the call to finalizeRecording() - it should only stop the stream tracks
       mediaRecorder.onstop = () => {
+        console.log('MediaRecorder stopped, total chunks:', chunksRef.current.length);
         // Stop the stream
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
         }
+        // Reset finalized flag so we can finalize again with new chunks
+        isFinalized.current = false;
       };
 
-      mediaRecorder.start();
+      // Request data every second to ensure we capture all audio
+      mediaRecorder.start(1000);
       setState('recording');
       
-      // When resuming (i.e., not state === 'idle'), setDuration(pausedTimeRef.current) to correctly restore the accumulated duration before starting the timer
+      // When resuming, restore the accumulated duration
       if (pausedTimeRef.current > 0) {
         setDuration(pausedTimeRef.current);
       }
@@ -219,34 +238,34 @@ export const useAudioRecorder = () => {
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      // Call mediaRecorderRef.current.stop()
+      console.log('Pausing recording, current chunks:', chunksRef.current.length);
+      // Stop the current recording session
       mediaRecorderRef.current.stop();
-      // Call stopTimer()
       stopTimer();
-      // Set pausedTimeRef.current = duration (to save the total accumulated recording time up to this point)
+      // Save the current duration
       pausedTimeRef.current = duration;
-      // Set setState('paused')
       setState('paused');
     }
   }, [stopTimer, duration]);
 
   const resumeRecording = useCallback(async () => {
-    // Call startRecording(). The startRecording logic will handle resuming from pausedTimeRef.current
+    console.log('Resuming recording, existing chunks:', chunksRef.current.length);
+    // Start a new recording session that will add to existing chunks
     await startRecording();
   }, [startRecording]);
 
   const playAudio = useCallback(async () => {
-    // Before playing, it must call await finalizeRecording() to ensure audioBlob and audioUrl are created from all collected chunks and totalRecordingDurationRef.current is correctly set
-    if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl)) {
+    // Before playing, finalize the recording if we have chunks but no finalized audio
+    if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current)) {
+      console.log('Finalizing before playback');
       await finalizeRecording();
     }
     
     if (audioUrl) {
-      // Then, it proceeds to create/update audioRef.current with the (now finalized) audioUrl
+      // Create or update audio element
       if (!audioRef.current) {
         audioRef.current = new Audio(audioUrl);
         audioRef.current.onended = () => {
-          // When audioRef.current.onended, set playbackTime to totalRecordingDurationRef.current and waveform reflect the full duration
           setPlaybackTime(totalRecordingDurationRef.current);
           setState('paused');
           stopPlaybackTimer();
@@ -258,13 +277,12 @@ export const useAudioRecorder = () => {
           startPlaybackTimer();
         };
         audioRef.current.onloadedmetadata = () => {
-          // Reset playback time when audio loads
           setPlaybackTime(0);
         };
       } else {
         // Update the audio source if it has changed
         audioRef.current.src = audioUrl;
-        audioRef.current.load(); // Reload the audio element
+        audioRef.current.load();
       }
       
       audioRef.current.play();
@@ -282,13 +300,13 @@ export const useAudioRecorder = () => {
   }, [stopPlaybackTimer]);
 
   const deleteRecording = useCallback(() => {
-    // clearRecording should be sufficient. It already resets all relevant states and refs. No need to call finalizeRecording here
     clearRecording();
   }, [clearRecording]);
 
   const downloadRecording = useCallback(async () => {
-    // Call await finalizeRecording() before attempting to use audioBlob
-    if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl)) {
+    // Finalize before download if needed
+    if (chunksRef.current.length > 0 && (!audioBlob || !audioUrl || !isFinalized.current)) {
+      console.log('Finalizing before download');
       await finalizeRecording();
     }
     
@@ -305,7 +323,6 @@ export const useAudioRecorder = () => {
 
   // Helper function to get display time for the timer
   const getDisplayTime = useCallback(() => {
-    // Ensure formatTime(getDisplayTime()) uses duration when recording/paused, and playbackTime (which can go up to totalRecordingDurationRef.current) when playing
     if (state === 'playing') {
       return Math.floor(playbackTime);
     }
