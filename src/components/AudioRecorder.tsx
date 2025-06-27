@@ -36,8 +36,8 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onDownload, onDelete }) =
     downloadRecording,
   } = useAudioRecorder();
 
-  const handleDownload = () => {
-    const blob = downloadRecording();
+  const handleDownload = async () => {
+    const blob = await downloadRecording();
     if (blob && onDownload) {
       onDownload(blob);
     }
