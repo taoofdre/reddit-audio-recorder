@@ -59,7 +59,14 @@ export const useAudioRecorder = () => {
 
   const requestPermission = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          sampleRate: 48000,
+          channelCount: 2,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
       setHasPermission(true);
       streamRef.current = stream;
       
@@ -101,6 +108,60 @@ export const useAudioRecorder = () => {
     }
   }, []);
 
+  // Convert WebM audio to WAV format
+  const convertToWav = useCallback(async (webmBlob: Blob): Promise<Blob> => {
+    try {
+      const arrayBuffer = await webmBlob.arrayBuffer();
+      const audioContext = new AudioContext({ sampleRate: 48000 });
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Create WAV file
+      const length = audioBuffer.length;
+      const numberOfChannels = audioBuffer.numberOfChannels;
+      const sampleRate = audioBuffer.sampleRate;
+      const arrayBuffer2 = new ArrayBuffer(44 + length * numberOfChannels * 2);
+      const view = new DataView(arrayBuffer2);
+      
+      // WAV header
+      const writeString = (offset: number, string: string) => {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
+        }
+      };
+      
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, numberOfChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+      view.setUint16(32, numberOfChannels * 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, length * numberOfChannels * 2, true);
+      
+      // Convert audio data
+      let offset = 44;
+      for (let i = 0; i < length; i++) {
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+          const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
+          view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+          offset += 2;
+        }
+      }
+      
+      await audioContext.close();
+      return new Blob([arrayBuffer2], { type: 'audio/wav' });
+    } catch (error) {
+      console.error('Error converting to WAV:', error);
+      // Return original blob if conversion fails
+      return webmBlob;
+    }
+  }, []);
+
   const finalizeRecording = useCallback(async (): Promise<{ blob: Blob; url: string } | null> => {
     if (isFinalized.current || chunksRef.current.length === 0) {
       return null;
@@ -109,18 +170,21 @@ export const useAudioRecorder = () => {
     console.log('Finalizing recording with', chunksRef.current.length, 'chunks');
     
     // Create blob from all chunks collected so far
-    const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+    const webmBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+    
+    // Convert to WAV format
+    const wavBlob = await convertToWav(webmBlob);
     
     // Clean up the old URL if it exists
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
     }
     
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(wavBlob);
 
     // Decode audio to get precise duration and set as total recording duration
     try {
-      const arrayBuffer = await blob.arrayBuffer();
+      const arrayBuffer = await wavBlob.arrayBuffer();
       const audioContext = new AudioContext();
       
       try {
@@ -144,11 +208,11 @@ export const useAudioRecorder = () => {
     }
 
     // Update state after processing is complete
-    setAudioBlob(blob);
+    setAudioBlob(wavBlob);
     setAudioUrl(url);
 
-    return { blob, url };
-  }, [audioUrl, duration]);
+    return { blob: wavBlob, url };
+  }, [audioUrl, duration, convertToWav]);
 
   const clearRecording = useCallback(() => {
     stopTimer();
@@ -184,12 +248,34 @@ export const useAudioRecorder = () => {
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          sampleRate: 48000,
+          channelCount: 2,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
       streamRef.current = stream;
       
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm'
-      });
+      // Try to use the best available audio format with quality settings
+      let mimeType = 'audio/webm';
+      let options: MediaRecorderOptions = {};
+      
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+        options = {
+          mimeType,
+          audioBitsPerSecond: 128000
+        };
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        options = {
+          mimeType: 'audio/webm',
+          audioBitsPerSecond: 128000
+        };
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       
       // When starting fresh (state === 'idle')

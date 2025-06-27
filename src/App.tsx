@@ -33,6 +33,7 @@ function App() {
         <div className="mt-8 text-center text-gray-600 text-sm">
           <p>Click "Allow mic access" to start recording</p>
           <p className="mt-2">Features: Record, Pause, Resume, Playback, Download, Delete</p>
+          <p className="mt-2 text-xs text-gray-500">Audio saved as WAV • 48kHz • 128kbps</p>
         </div>
       </div>
     </div>
